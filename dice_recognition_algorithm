@@ -1,0 +1,88 @@
+import cv2
+import numpy as np
+from sklearn.cluster import DBSCAN
+
+VIDEO_FILE = "dice.mp4" #Add your own file path here
+RESIZE_WIDTH = 800
+
+def create_blob_detector():
+    params = cv2.SimpleBlobDetector_Params()
+    params.filterByArea = True
+    params.minArea = 30
+    params.maxArea = 2000
+    params.filterByCircularity = True
+    params.minCircularity = 0.6
+    params.filterByInertia = True
+    params.minInertiaRatio = 0.3
+    params.filterByColor = True
+    params.blobColor = 0
+    return cv2.SimpleBlobDetector_create(params)
+
+def put_label(img, text, pos, color=(0, 0, 255)):
+    x, y = pos
+    cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 6, cv2.LINE_AA)
+    cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2, color, 4, cv2.LINE_AA)
+
+def detect_dice_and_pips(frame, detector):
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    keypoints = detector.detect(gray)
+
+    if not keypoints:
+        return frame, []
+
+    pts = np.array([kp.pt for kp in keypoints])
+    clustering = DBSCAN(eps=60, min_samples=1).fit(pts)
+    labels = clustering.labels_
+    dice_info = []
+
+    for die_id in np.unique(labels):
+        mask = labels == die_id
+        count = int(np.sum(mask))
+        cluster_pts = pts[mask].astype(int)
+        x_min, y_min = cluster_pts.min(axis=0)
+        x_max, y_max = cluster_pts.max(axis=0)
+        cx = int(cluster_pts[:, 0].mean())
+        cy = int(cluster_pts[:, 1].mean())
+
+        cv2.rectangle(frame, (x_min - 20, y_min - 20), (x_max + 20, y_max + 20), (0, 255, 0), 3)
+        put_label(frame, f"{count}", (cx - 20, cy))
+        dice_info.append(count)
+
+    frame = cv2.drawKeypoints(frame, keypoints, None, (255, 0, 0),
+                              cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
+    return frame, dice_info
+
+def main():
+    cap = cv2.VideoCapture(VIDEO_FILE)
+    if not cap.isOpened():
+        print("ERROR: Could not open video.")
+        return
+
+    detector = create_blob_detector()
+    cv2.namedWindow("Dice Detector", cv2.WINDOW_NORMAL)
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        h, w = frame.shape[:2]
+        scale = RESIZE_WIDTH / w
+        frame = cv2.resize(frame, (RESIZE_WIDTH, int(h * scale)))
+
+        out_frame, counts = detect_dice_and_pips(frame, detector)
+
+        if counts:
+            total = int(sum(counts))
+            put_label(out_frame, f"Total: {total}", (50, 80), color=(50, 200, 50))
+
+        cv2.imshow("Dice Detector", out_frame)
+        if cv2.waitKey(30) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()
