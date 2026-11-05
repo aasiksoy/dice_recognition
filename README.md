@@ -57,6 +57,7 @@ Press **q** to quit the video window.
 | `--eps` | `60` | Maximum distance (pixels) between pips of the same die |
 | `--min-area` | `30` | Minimum pip area in pixels |
 | `--max-area` | `2000` | Maximum pip area in pixels |
+| `--min-contrast` | `80` | How much darker a pip must be than the area around it |
 | `--output` | – | Save the annotated image or video to this path |
 | `--no-display` | off | Run without opening a preview window |
 
@@ -64,6 +65,7 @@ Press **q** to quit the video window.
 
 1. **Preprocessing** – each frame is resized, converted to grayscale and lightly blurred.
 2. **Pip detection** – `cv2.SimpleBlobDetector` finds dark, round blobs filtered by area, circularity and inertia.
+   Blobs that are not clearly darker than their surroundings, such as shadows next to a die, are discarded.
 3. **Clustering** – pip centers are grouped with `DBSCAN(min_samples=1)`. Pips closer than `eps` pixels belong to the same die.
 4. **Counting** – the number of pips in each cluster is that die's value, and the values are summed for the total.
 
@@ -72,6 +74,8 @@ Press **q** to quit the video window.
 - **Dice are merged together:** lower `--eps` or space the dice further apart.
 - **One die is split into several:** raise `--eps`, especially for large dice or high resolutions.
 - **Pips are missed:** lower `--min-area`, or improve lighting and contrast.
+- **Shadows or dark spots counted as pips:** raise `--min-contrast`.
+- **Faint pips ignored:** lower `--min-contrast`.
 - **False detections:** raise `--min-area` or use a plain, light background.
 
 The detector works best with light dice that have dark pips, photographed from above under even lighting.
@@ -83,7 +87,9 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The tests draw synthetic dice with OpenCV, so no sample images are needed.
+The tests cover both synthetic dice drawn with OpenCV and real photos in
+`tests/data/`. To add a real photo, place it in that folder and add its
+expected values (left to right) to `REAL_IMAGES` in the test file.
 
 ## Project structure
 
@@ -92,7 +98,9 @@ dice_recognition/
 ├── dice_detector.py
 ├── requirements.txt
 ├── requirements-dev.txt
+├── pytest.ini
 ├── tests/
+│   ├── data/
 │   └── test_dice_detector.py
 └── .github/workflows/tests.yml
 ```

@@ -8,6 +8,7 @@ from sklearn.cluster import DBSCAN
 WINDOW_NAME = "Dice Detector"
 DEFAULT_WIDTH = 800
 DEFAULT_EPS = 60.0
+DEFAULT_MIN_CONTRAST = 80.0
 
 
 def create_blob_detector(min_area=30, max_area=2000, min_circularity=0.6, min_inertia=0.3):
@@ -35,9 +36,26 @@ def cluster_pips(points, eps=DEFAULT_EPS):
     return DBSCAN(eps=eps, min_samples=1).fit(points).labels_
 
 
-def detect_dice(frame, detector, eps=DEFAULT_EPS):
+def pip_contrast(gray, keypoint):
+    x, y = keypoint.pt
+    r = keypoint.size / 2
+    outer = int(np.ceil(r * 2)) + 1
+    h, w = gray.shape
+    x0, x1 = max(int(x) - outer, 0), min(int(x) + outer + 1, w)
+    y0, y1 = max(int(y) - outer, 0), min(int(y) + outer + 1, h)
+    patch = gray[y0:y1, x0:x1].astype(float)
+    yy, xx = np.indices(patch.shape)
+    dist = np.hypot(xx + x0 - x, yy + y0 - y)
+    inner = patch[dist <= r * 0.6]
+    ring = patch[(dist >= r * 1.4) & (dist <= r * 2.0)]
+    if inner.size == 0 or ring.size == 0:
+        return 0.0
+    return ring.mean() - inner.mean()
+
+
+def detect_dice(frame, detector, eps=DEFAULT_EPS, min_contrast=DEFAULT_MIN_CONTRAST):
     gray = cv2.GaussianBlur(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (5, 5), 0)
-    keypoints = detector.detect(gray)
+    keypoints = [kp for kp in detector.detect(gray) if pip_contrast(gray, kp) >= min_contrast]
     if not keypoints:
         return [], keypoints
 
@@ -98,6 +116,8 @@ def parse_args(argv=None):
                         help=f"max pip distance within one die, in pixels (default: {DEFAULT_EPS})")
     parser.add_argument("--min-area", type=float, default=30, help="minimum pip area (default: 30)")
     parser.add_argument("--max-area", type=float, default=2000, help="maximum pip area (default: 2000)")
+    parser.add_argument("--min-contrast", type=float, default=DEFAULT_MIN_CONTRAST,
+                        help=f"how much darker a pip must be than its surroundings (default: {DEFAULT_MIN_CONTRAST})")
     parser.add_argument("--output", help="save the annotated result to this file")
     parser.add_argument("--no-display", action="store_true", help="do not open a preview window")
     return parser.parse_args(argv)
@@ -108,7 +128,7 @@ def process_image(path, detector, args):
     if frame is None:
         return False
     frame = resize_to_width(frame, args.width)
-    dice, keypoints = detect_dice(frame, detector, args.eps)
+    dice, keypoints = detect_dice(frame, detector, args.eps, args.min_contrast)
     result = annotate(frame, dice, keypoints)
     print(f"Dice: {[d['value'] for d in dice]}  Total: {sum(d['value'] for d in dice)}")
 
@@ -138,7 +158,7 @@ def process_video(source, detector, args):
                 break
 
             frame = resize_to_width(frame, args.width)
-            dice, keypoints = detect_dice(frame, detector, args.eps)
+            dice, keypoints = detect_dice(frame, detector, args.eps, args.min_contrast)
             result = annotate(frame, dice, keypoints)
 
             if args.output:
