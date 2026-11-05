@@ -200,3 +200,21 @@ def test_shadow_is_not_counted_as_pip(detector):
     loose, _ = detect_dice(frame, detector, min_contrast=0)
     strict, _ = detect_dice(frame, detector)
     assert sum(d["value"] for d in loose) > sum(d["value"] for d in strict) == 7
+
+
+def test_no_display_never_uses_gui(scene_image, tmp_path, monkeypatch):
+    def no_gui(*args, **kwargs):
+        raise AssertionError("GUI function called with --no-display")
+
+    for name in ("imshow", "namedWindow", "waitKey", "destroyAllWindows"):
+        monkeypatch.setattr(cv2, name, no_gui)
+
+    video = tmp_path / "dice.avi"
+    frame = make_scene([2])
+    h, w = frame.shape[:2]
+    writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"MJPG"), 10, (w, h))
+    writer.write(frame)
+    writer.release()
+
+    assert main([str(scene_image), "--no-display"]) == 0
+    assert main([str(video), "--no-display"]) == 0

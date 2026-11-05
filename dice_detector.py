@@ -176,7 +176,8 @@ def process_video(source, detector, args):
         cap.release()
         if writer is not None:
             writer.release()
-        cv2.destroyAllWindows()
+        if not args.no_display:
+            cv2.destroyAllWindows()
     return 0
 
 

@@ -11,7 +11,7 @@ __pycache__/
 # Virtual environments
 env/
 venv/
-.venv/
+.venv*/
 ENV/
 
 # Python egg metadata
