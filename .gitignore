@@ -31,8 +31,6 @@ build/
 *.mkv
 *.flv
 
-# Uncomment if you want to ignore sample videos:
-# dice.mp4
 
 # OS-generated files
 
@@ -56,3 +54,5 @@ desktop.ini
 *.log
 *.tmp
 *.temp
+
+.pytest_cache/
